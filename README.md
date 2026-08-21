@@ -16,7 +16,7 @@ Supabase es la fuente única de Auth y PostgreSQL. No cree otra base PostgreSQL 
 ## 2. Configurar Supabase
 
 1. Cree un proyecto en Supabase.
-2. Abra **SQL Editor** y ejecute, en orden, todos los archivos de `supabase/migrations/`, del `202608200001_initial.sql` al `202608200009_dynamic_plans.sql`.
+2. Abra **SQL Editor** y ejecute, en orden, todos los archivos de `supabase/migrations/`, del `202608200001_initial.sql` al `202608200011_work_catalog_data.sql`.
 3. En **Authentication → URL Configuration**, agregue:
    - Local: `http://localhost:3000/**`
    - Railway: `https://SU-DOMINIO.up.railway.app/**`

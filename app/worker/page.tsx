@@ -4,24 +4,27 @@ import { JobCard } from "@/components/job-card";
 import { Notice } from "@/components/notice";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { CATEGORIES,MUNICIPALITIES } from "@/lib/config";
+import { MUNICIPALITIES } from "@/lib/config";
+import { getCatalogCategories } from "@/lib/work-catalog";
 import type { Job } from "@/lib/types";
 
 export default async function WorkerHome({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}){
   const {profile}=await requireUser("worker");
   const q=await searchParams;
   const supabase=await createClient();
-  let query=supabase.from("jobs").select("*").in("status",["open","candidates_available"]).gte("job_date",new Date().toISOString().slice(0,10)).order("job_date").order("start_time");
+  const page=Math.max(1,Number(q.page)||1); const pageSize=20; const from=(page-1)*pageSize;
+  let query=supabase.from("jobs").select("id,employer_id,title,category,description,workers_needed,municipality,zone,job_date,start_time,duration_hours,pay_amount,payment_method,notes,status,paid,candidate_limit,created_at").in("status",["open","candidates_available"]).gte("job_date",new Date().toISOString().slice(0,10)).order("job_date").order("start_time").order("id").range(from,from+pageSize-1);
   if(q.category)query=query.eq("category",q.category);
   if(q.municipality)query=query.eq("municipality",q.municipality);
   const today=new Date(); const tomorrow=new Date(today); tomorrow.setDate(today.getDate()+1);
   if(q.when==="today")query=query.eq("job_date",today.toISOString().slice(0,10));
   if(q.when==="tomorrow")query=query.eq("job_date",tomorrow.toISOString().slice(0,10));
   if(q.when==="week"){const end=new Date(today);end.setDate(today.getDate()+7);query=query.lte("job_date",end.toISOString().slice(0,10));}
-  const [{data:jobs},{data:workerRows},{data:applications}]=await Promise.all([
+  const [{data:jobs},{data:workerRows},{data:applications},categories]=await Promise.all([
     query,
     supabase.rpc("get_my_worker_profile"),
-    supabase.from("applications").select("status").in("status",["interested","selected","confirmed"]),
+    supabase.from("applications").select("status").in("status",["interested","selected","confirmed"]).limit(3),
+    getCatalogCategories(),
   ]);
   const worker=Array.isArray(workerRows)?workerRows[0]:workerRows;
   const ids=(jobs??[]).map(j=>j.id);
@@ -52,8 +55,8 @@ export default async function WorkerHome({searchParams}:{searchParams:Promise<Re
     {profilePercent<100&&<section className="card p-5 mb-7 animate-in"><div className="flex justify-between gap-3"><div><h3 className="font-black">Haz más fuerte tu perfil</h3><p className="text-sm muted mt-1">Tus datos ayudan a mostrarte jales compatibles.</p></div><b>{profilePercent}%</b></div><div className="progress-track mt-4"><div className="progress-bar" style={{width:`${profilePercent}%`}}/></div><Link className="mt-4 inline-block text-sm font-black text-[#5b45e0] underline" href="/worker/profile">Revisar mi perfil →</Link></section>}
     <section id="jales" className="scroll-mt-24">
       <div className="flex items-end justify-between gap-3 mb-4"><div><span className="pill">OPORTUNIDADES</span><h2 className="section-title mt-2">Jales disponibles</h2><p className="muted text-sm mt-1">El pago siempre se muestra antes de postularte.</p></div></div>
-      <form className="filter-card mb-5 grid grid-cols-2 md:grid-cols-4 gap-3"><label className="label">Cuándo<select className="field" name="when" defaultValue={q.when??""}><option value="">Próximos</option><option value="today">Hoy</option><option value="tomorrow">Mañana</option><option value="week">Esta semana</option></select></label><label className="label">Categoría<select className="field" name="category" defaultValue={q.category??""}><option value="">Todas</option>{CATEGORIES.map(x=><option key={x}>{x}</option>)}</select></label><label className="label">Municipio<select className="field" name="municipality" defaultValue={q.municipality??""}><option value="">Todos</option>{MUNICIPALITIES.map(x=><option key={x}>{x}</option>)}</select></label><div className="filter-actions"><button className="btn btn-primary">APLICAR</button>{(q.when||q.category||q.municipality)&&<Link href="/worker#jales" className="filter-clear">Limpiar</Link>}</div></form>
-      {jobsWithCounts.length?<div className="grid-cards">{(jobsWithCounts as Job[]).map(job=><JobCard key={job.id} job={job}/>)}</div>:<div className="card p-9 text-center animate-in"><div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[#efffdc] text-4xl">🧤</div><h3 className="font-black text-xl mt-4">Todavía no hay jales con esos filtros</h3><p className="muted mt-2 max-w-md mx-auto">Cuando los empleadores publiquen, aparecerán aquí. Prueba otra fecha o categoría.</p></div>}
+      <form className="filter-card mb-5 grid grid-cols-2 md:grid-cols-4 gap-3"><label className="label">Cuándo<select className="field" name="when" defaultValue={q.when??""}><option value="">Próximos</option><option value="today">Hoy</option><option value="tomorrow">Mañana</option><option value="week">Esta semana</option></select></label><label className="label">Categoría<select className="field" name="category" defaultValue={q.category??""}><option value="">Todas</option>{categories.map(x=><option key={x.slug} value={x.name}>{x.name}</option>)}</select></label><label className="label">Municipio<select className="field" name="municipality" defaultValue={q.municipality??""}><option value="">Todos</option>{MUNICIPALITIES.map(x=><option key={x}>{x}</option>)}</select></label><div className="filter-actions"><button className="btn btn-primary">APLICAR</button>{(q.when||q.category||q.municipality)&&<Link href="/worker#jales" className="filter-clear">Limpiar</Link>}</div></form>
+      {jobsWithCounts.length?<><div className="grid-cards">{(jobsWithCounts as Job[]).map(job=><JobCard key={job.id} job={job}/>)}</div><div className="mt-6 flex justify-center gap-3">{page>1&&<Link className="btn btn-soft" href={{pathname:"/worker",query:{...q,page:page-1}}}>← ANTERIORES</Link>}{jobsWithCounts.length===pageSize&&<Link className="btn btn-primary" href={{pathname:"/worker",query:{...q,page:page+1}}}>SIGUIENTES →</Link>}</div></>:<div className="card p-9 text-center animate-in"><div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[#efffdc] text-4xl">🧤</div><h3 className="font-black text-xl mt-4">Todavía no hay jales con esos filtros</h3><p className="muted mt-2 max-w-md mx-auto">Cuando los empleadores publiquen, aparecerán aquí. Prueba otra fecha o categoría.</p></div>}
     </section>
   </AppShell>;
 }
