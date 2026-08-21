@@ -10,10 +10,14 @@ export const metadata: Metadata = {
   title: { default: "Jale — Hoy buscas. Mañana jalas.", template: "%s | Jale" },
   description: "Jales eventuales en Aguascalientes. Sin CV. Pago visible. Oportunidades rápidas.",
   manifest: "/manifest.webmanifest",
-  icons: { icon: "/icon.svg", apple: "/icon.svg" },
+  icons: {
+    icon: [{ url:"/favicon-32.png",sizes:"32x32",type:"image/png" },{ url:"/icon-192.png",sizes:"192x192",type:"image/png" }],
+    shortcut: "/favicon-32.png",
+    apple: [{ url:"/apple-touch-icon.png",sizes:"180x180",type:"image/png" }],
+  },
   openGraph: { title: "Jale", description: "Hoy buscas. Mañana jalas.", type: "website", locale: "es_MX" },
 };
-export const viewport: Viewport = { themeColor: "#5b45e0", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#30247c", width: "device-width", initialScale:1, maximumScale:1, userScalable:false, viewportFit:"cover" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="es"><body>
