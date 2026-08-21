@@ -8,16 +8,25 @@ import { requireUser } from "@/lib/auth";
 const s=(fd:FormData,key:string)=>String(fd.get(key)??"").trim();
 const fail=(path:string,message:string):never=>redirect(`${path}${path.includes("?")?"&":"?"}error=${encodeURIComponent(message)}`);
 const safeNext=(value:string)=>value.startsWith("/")&&!value.startsWith("//")&&!value.includes("\\")?value:"/dashboard";
+const skillItems=(fd:FormData)=>{
+  try{
+    const parsed=JSON.parse(s(fd,"skill_items")) as Array<{skill_id:unknown;level:unknown}>;
+    if(!Array.isArray(parsed))return [];
+    return parsed.filter(x=>Number.isInteger(Number(x.skill_id))&&["helper","capable","experienced"].includes(String(x.level))).slice(0,80).map(x=>({skill_id:Number(x.skill_id),level:String(x.level)}));
+  }catch{return []}
+};
 
 export async function signInAction(fd:FormData) {
   const supabase=await createClient();
-  const {error}=await supabase.auth.signInWithPassword({email:s(fd,"email"),password:s(fd,"password")});
+  const {data,error}=await supabase.auth.signInWithPassword({email:s(fd,"email"),password:s(fd,"password")});
   if(error) fail("/auth", "Correo o contraseña incorrectos");
   const requested=safeNext(s(fd,"next"));
   if(requested!=="/dashboard")redirect(requested);
   const {data:profiles}=await supabase.rpc("get_my_profile");
   const role=profiles?.[0]?.role;
-  redirect(role==="admin"||role==="worker"||role==="employer"?`/${role}`:"/onboarding");
+  if(role==="admin"||role==="worker"||role==="employer")redirect(`/${role}`);
+  const intended=data.user?.user_metadata?.intended_role==="employer"?"employer":"worker";
+  redirect(`/onboarding?role=${intended}`);
 }
 export async function signUpAction(fd:FormData) {
   const supabase=await createClient();
@@ -61,6 +70,7 @@ export async function onboardingAction(fd:FormData) {
   if(role==="worker"&&categories.length===0) fail("/onboarding?role=worker","Elige al menos una categoría de jale");
   const {error}=await supabase.rpc("complete_onboarding",{p_name:s(fd,"full_name"),p_phone:s(fd,"phone"),p_role:role,p_municipality:s(fd,"municipality"),p_age:role==="worker"?Number(s(fd,"age")):null,p_zone:role==="worker"?s(fd,"zone"):null,p_categories:role==="worker"?fd.getAll("categories").map(String):null,p_availability:role==="worker"?s(fd,"availability"):null,p_employer_type:role==="employer"?s(fd,"employer_type"):null});
   if(error) fail(`/onboarding?role=${role}`,error.message);
+  if(role==="worker")await supabase.rpc("replace_my_worker_skills",{p_items:skillItems(fd),p_category_names:categories});
   const {error:legalError}=await supabase.rpc("accept_current_legal",{p_version:String(user.user_metadata.legal_version??"2026-08-20")});
   if(legalError) fail(`/onboarding?role=${role}`,legalError.message);
   revalidatePath("/dashboard");
@@ -74,6 +84,8 @@ export async function updateWorkerProfileAction(fd:FormData) {
   const supabase=await createClient();
   const {error}=await supabase.rpc("update_worker_profile",{p_name:s(fd,"full_name"),p_phone:s(fd,"phone"),p_municipality:s(fd,"municipality"),p_age:Number(s(fd,"age")),p_zone:s(fd,"zone"),p_categories:categories,p_availability:s(fd,"availability")});
   if(error) fail("/worker/profile",error.message);
+  const {error:skillsError}=await supabase.rpc("replace_my_worker_skills",{p_items:skillItems(fd),p_category_names:categories});
+  if(skillsError&&!skillsError.message.includes("Could not find"))fail("/worker/profile",skillsError.message);
   revalidatePath("/worker"); revalidatePath("/worker/profile");
   redirect(`/worker/profile?message=${encodeURIComponent("Perfil actualizado correctamente")}`);
 }
@@ -82,6 +94,8 @@ export async function createJobAction(fd:FormData) {
   await requireUser("employer"); const supabase=await createClient();
   const {data,error}=await supabase.rpc("create_job",{p_title:s(fd,"title"),p_category:s(fd,"category"),p_description:s(fd,"description"),p_workers_needed:Number(s(fd,"workers_needed")),p_municipality:s(fd,"municipality"),p_zone:s(fd,"zone"),p_job_date:s(fd,"job_date"),p_start_time:s(fd,"start_time"),p_duration_hours:Number(s(fd,"duration_hours")),p_pay_amount:Number(s(fd,"pay_amount")),p_payment_method:s(fd,"payment_method"),p_notes:s(fd,"notes")||null});
   if(error) fail("/employer/jobs/new",error.message);
+  const ids=s(fd,"job_skill_ids").split(",").map(Number).filter(Number.isInteger).slice(0,20);
+  if(ids.length)await supabase.rpc("replace_job_skills",{p_job_id:data.id,p_skill_ids:ids});
   redirect(`/employer/jobs/${data.id}?created=1`);
 }
 export async function reportPaymentAction(fd:FormData) { await requireUser("employer"); const supabase=await createClient(); const id=s(fd,"job_id"); const posts=Number(s(fd,"package_posts")||"1"); const {error}=await supabase.rpc("report_package_payment",{p_job_id:id,p_package_posts:posts}); if(error) fail(`/employer/jobs/${id}`,error.message); revalidatePath(`/employer/jobs/${id}`); redirect(`/employer/jobs/${id}?message=${encodeURIComponent("Transferencia reportada con su referencia. La revisaremos pronto.")}`); }

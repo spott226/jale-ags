@@ -18,7 +18,10 @@ export async function currentUser() {
 export async function requireUser(role?: Role) {
   const session = await currentUser();
   if (!session) redirect(`/auth?next=${role ? `/${role}` : "/dashboard"}`);
-  if (!session.profile) redirect("/onboarding");
+  if (!session.profile) {
+    const intended=session.user.user_metadata?.intended_role==="employer"?"employer":"worker";
+    redirect(`/onboarding?role=${intended}`);
+  }
   if (session.profile.status !== "active") redirect("/account-restricted");
   if (role && session.profile.role !== role && session.profile.role !== "admin") redirect("/dashboard");
   return { user: session.user, profile: session.profile };
