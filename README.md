@@ -16,7 +16,7 @@ Supabase es la fuente única de Auth y PostgreSQL. No cree otra base PostgreSQL 
 ## 2. Configurar Supabase
 
 1. Cree un proyecto en Supabase.
-2. Abra **SQL Editor** y ejecute, en orden, todos los archivos de `supabase/migrations/`, del `202608200001_initial.sql` al `202608200008_billing_controls_security.sql`.
+2. Abra **SQL Editor** y ejecute, en orden, todos los archivos de `supabase/migrations/`, del `202608200001_initial.sql` al `202608200009_dynamic_plans.sql`.
 3. En **Authentication → URL Configuration**, agregue:
    - Local: `http://localhost:3000/**`
    - Railway: `https://SU-DOMINIO.up.railway.app/**`
@@ -102,7 +102,7 @@ Los parámetros editables están en `app_settings`:
 - `candidate_caps`: fórmula de cupos
 - `opportunity_score`: pesos determinísticos
 
-El superadmin cambia reglas, precios, excepciones y créditos desde **Reglas de cobro**. Cada transferencia usa una referencia `JALE-XXXXXXXX`; al confirmar un paquete, el jale actual se abre y las publicaciones restantes se acreditan al empleador.
+El superadmin cambia reglas, crea/edita/elimina planes, administra precios, excepciones y créditos desde **Reglas de cobro**. Cada transferencia usa una referencia `JALE-XXXXXXXX`; al confirmar un paquete, el jale actual se abre y las publicaciones restantes se acreditan al empleador.
 
 ## 7. Privacidad y seguridad
 

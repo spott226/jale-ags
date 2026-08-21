@@ -7,7 +7,7 @@ import { currentUser } from "@/lib/auth";
 
 export default async function AuthPage({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}){
   const session=await currentUser();
-  if(session?.profile)redirect("/dashboard");
+  if(session?.profile)redirect(`/${session.profile.role}`);
   if(session?.user)redirect(`/onboarding?role=${session.user.user_metadata?.intended_role??"worker"}`);
   const q=await searchParams; const role=q.role==="employer"?"employer":"worker"; const login=q.mode==="login";
   return <main className="auth-stage"><div className="shell py-8 md:py-12">
