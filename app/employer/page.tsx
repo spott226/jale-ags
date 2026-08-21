@@ -9,8 +9,15 @@ import type { Job } from "@/lib/types";
 type EmployerBilling={free_posts_used:number;free_post_credits?:number;billing_exempt?:boolean;early_access?:boolean};
 export default async function EmployerHome({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}){
   const {profile}=await requireUser("employer"); const q=await searchParams; const supabase=await createClient();
-  const [{data:employer},{data:jobs},{data:settings}]=await Promise.all([supabase.from("employers").select("*").single(),supabase.from("jobs").select("*").order("created_at",{ascending:false}),supabase.from("app_settings").select("key,value").in("key",["free_posts","billing_config"])]);
-  const account=employer as EmployerBilling|null; const freeLimit=Number(settings?.find(x=>x.key==="free_posts")?.value??2); const config=settings?.find(x=>x.key==="billing_config")?.value as {charging_enabled?:boolean}|undefined;
+const [employerResult,jobsResult,settingsResult]=await Promise.all([
+  supabase.from("employers").select("*").single(),
+  supabase.from("jobs").select("*").order("created_at",{ascending:false}),
+  supabase.from("app_settings").select("key,value").in("key",["free_posts","billing_config"])
+]);
+
+const employer=employerResult.data;
+const jobs=jobsResult.data;
+const settings=settingsResult.data;  const account=employer as EmployerBilling|null; const freeLimit=Number(settings?.find(x=>x.key==="free_posts")?.value??2); const config=settings?.find(x=>x.key==="billing_config")?.value as {charging_enabled?:boolean}|undefined;
   const charging=config?.charging_enabled??true; const baseRemaining=Math.max(0,freeLimit-(account?.free_posts_used??0)); const credits=account?.free_post_credits??0; const unlimited=!charging||Boolean(account?.billing_exempt); const remaining=unlimited?"∞":String(baseRemaining+credits);
   const open=jobs?.filter(j=>["open","candidates_available"].includes(j.status)).length??0; const filled=jobs?.filter(j=>["filled","completed"].includes(j.status)).length??0;
   return <AppShell role="employer" name={profile.full_name}>
