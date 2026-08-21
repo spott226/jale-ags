@@ -1,0 +1,1 @@
+export default function Restricted(){return <main className="shell py-20 max-w-xl"><div className="card p-7 text-center"><p className="text-5xl">🔒</p><h1 className="section-title mt-4">Cuenta restringida</h1><p className="mt-3 muted">Tu cuenta está suspendida o bloqueada. Contacta al administrador de Jale para una revisión.</p></div></main>}

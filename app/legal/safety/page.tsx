@@ -1,0 +1,9 @@
+import { LegalSection,LegalShell } from "@/components/legal-shell";
+
+export default function Safety(){return <LegalShell eyebrow="CONFIANZA Y COMUNIDAD" title="Política de seguridad" updated="20 de agosto de 2026">
+  <LegalSection title="Antes del jale"><ul><li>Revisa pago, tareas, duración, horario y zona antes de confirmar.</li><li>No envíes dinero para obtener un jale ni compartas contraseñas o códigos.</li><li>Informa a una persona de confianza dónde estarás y conserva evidencia del acuerdo.</li><li>Evita domicilios aislados o cambios de ubicación no explicados.</li></ul></LegalSection>
+  <LegalSection title="Durante el jale"><ul><li>No realices tareas peligrosas sin capacitación o equipo adecuado.</li><li>Retírate y pide ayuda ante amenazas, acoso, violencia o actividad ilegal.</li><li>No entregues documentos originales ni permitas que retengan tu teléfono.</li><li>En una emergencia llama al 911; Jale no sustituye a las autoridades.</li></ul></LegalSection>
+  <LegalSection title="Pagos y evidencia"><ul><li>Confirma quién pagará, cuándo y por qué medio.</li><li>Guarda capturas de la publicación, conversaciones externas y comprobantes.</li><li>Marca si recibiste lo acordado y reporta falta de pago desde el jale.</li></ul></LegalSection>
+  <LegalSection title="Reportes correctos"><p>Usa <b>Reportar a una persona</b> para impuntualidad, no-show, falta de pago o conducta. Usa <b>Reportar error</b> únicamente cuando falle la interfaz o el sistema. Los reportes falsos o usados para amenazar están prohibidos.</p></LegalSection>
+  <LegalSection title="Lo que Jale puede hacer"><p>Podemos conservar evidencia, investigar, limitar visibilidad, suspender cuentas, retirar publicaciones y colaborar con autoridades. No somos servicio de emergencia, aseguradora, cobrador ni garantía de pago.</p></LegalSection>
+</LegalShell>}
