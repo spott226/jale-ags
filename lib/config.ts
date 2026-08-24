@@ -11,7 +11,7 @@ export const MUNICIPALITIES = [
 ] as const;
 
 export const APP_RULES = {
-  freePosts: 2,
+  freePosts: 0,
   paidPostPrice: Number(process.env.NEXT_PUBLIC_POST_PRICE_MXN ?? 50),
   maxActiveApplications: 3,
   candidateCaps: { one: 5, two: 6, three: 8, smallMultiplier: 2, mediumMultiplier: 1.75, largeMultiplier: 1.5 },

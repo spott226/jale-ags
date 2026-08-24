@@ -1,14 +1,17 @@
 "use server";
 
+import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient,createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 
 const s=(fd:FormData,key:string)=>String(fd.get(key)??"").trim();
 const fail=(path:string,message:string):never=>redirect(`${path}${path.includes("?")?"&":"?"}error=${encodeURIComponent(message)}`);
 const safeNext=(value:string)=>value.startsWith("/")&&!value.startsWith("//")&&!value.includes("\\")?value:"/dashboard";
 const idList=(value:string)=>value.split(",").map(Number).filter(id=>Number.isInteger(id)&&id>0).slice(0,20);
+const cleanCode=(value:string)=>value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,24);
+const promoterPassword=()=>`Jale-${randomBytes(4).toString("hex")}-${randomBytes(2).toString("hex").toUpperCase()}`;
 const skillItems=(fd:FormData)=>{
   try{
     const parsed=JSON.parse(s(fd,"skill_items")) as Array<{skill_id:unknown;level:unknown}>;
@@ -25,7 +28,7 @@ export async function signInAction(fd:FormData) {
   if(requested!=="/dashboard")redirect(requested);
   const {data:profiles}=await supabase.rpc("get_my_profile");
   const role=profiles?.[0]?.role;
-  if(role==="admin"||role==="worker"||role==="employer")redirect(`/${role}`);
+  if(role==="admin"||role==="worker"||role==="employer"||role==="promoter")redirect(`/${role}`);
   const intended=data.user?.user_metadata?.intended_role==="employer"?"employer":"worker";
   redirect(`/onboarding?role=${intended}`);
 }
@@ -34,7 +37,8 @@ export async function signUpAction(fd:FormData) {
   const role=s(fd,"role")==="employer"?"employer":"worker";
   if(s(fd,"accept_legal")!=="true") fail(`/auth?role=${role}&mode=signup`,"Debes aceptar los Términos y el Aviso de Privacidad para crear tu cuenta");
   const acceptedAt=new Date().toISOString();
-  const {data,error}=await supabase.auth.signUp({email:s(fd,"email"),password:s(fd,"password"),options:{data:{intended_role:role,legal_version:"2026-08-20",legal_accepted_at:acceptedAt}}});
+  const referralCode=cleanCode(s(fd,"ref"));
+  const {data,error}=await supabase.auth.signUp({email:s(fd,"email"),password:s(fd,"password"),options:{data:{intended_role:role,legal_version:"2026-08-20",legal_accepted_at:acceptedAt,referral_code:role==="employer"?referralCode:""}}});
   if(error) fail(`/auth?role=${role}&mode=signup`,error.message);
   if(!data.session) redirect(`/auth?role=${role}&mode=login&message=${encodeURIComponent("Revisa tu correo para confirmar la cuenta y después inicia sesión.")}`);
   redirect(`/onboarding?role=${role}`);
@@ -72,6 +76,10 @@ export async function onboardingAction(fd:FormData) {
   const {error}=await supabase.rpc("complete_onboarding",{p_name:s(fd,"full_name"),p_phone:s(fd,"phone"),p_role:role,p_municipality:s(fd,"municipality"),p_age:role==="worker"?Number(s(fd,"age")):null,p_zone:role==="worker"?s(fd,"zone"):null,p_categories:role==="worker"?fd.getAll("categories").map(String):null,p_availability:role==="worker"?s(fd,"availability"):null,p_employer_type:role==="employer"?s(fd,"employer_type"):null});
   if(error) fail(`/onboarding?role=${role}`,error.message);
   if(role==="worker")await supabase.rpc("replace_my_worker_skills",{p_items:skillItems(fd),p_category_names:categories});
+  if(role==="employer"&&user.user_metadata?.referral_code){
+    const {error:referralError}=await supabase.rpc("claim_referral",{p_code:String(user.user_metadata.referral_code)});
+    if(referralError) fail("/onboarding?role=employer",referralError.message);
+  }
   const {error:legalError}=await supabase.rpc("accept_current_legal",{p_version:String(user.user_metadata.legal_version??"2026-08-20")});
   if(legalError) fail(`/onboarding?role=${role}`,legalError.message);
   revalidatePath("/dashboard");
@@ -118,6 +126,37 @@ export async function adminBillingSettingsAction(fd:FormData) { await requireUse
 export async function adminSavePackageAction(fd:FormData) { await requireUser("admin"); const supabase=await createClient(); const {error}=await supabase.rpc("admin_upsert_publication_package",{p_original_posts:s(fd,"original_posts")?Number(s(fd,"original_posts")):null,p_posts:Number(s(fd,"posts")),p_price:Number(s(fd,"price")),p_label:s(fd,"label")}); if(error) fail("/admin/billing",error.message); revalidatePath("/admin/billing"); redirect(`/admin/billing?message=${encodeURIComponent("Plan guardado")}`); }
 export async function adminDeletePackageAction(fd:FormData) { await requireUser("admin"); const supabase=await createClient(); const {error}=await supabase.rpc("admin_delete_publication_package",{p_posts:Number(s(fd,"posts"))}); if(error) fail("/admin/billing",error.message); revalidatePath("/admin/billing"); redirect(`/admin/billing?message=${encodeURIComponent("Plan eliminado")}`); }
 export async function adminEmployerBillingAction(fd:FormData) { await requireUser("admin"); const supabase=await createClient(); const {error}=await supabase.rpc("admin_update_employer_billing",{p_employer_id:s(fd,"employer_id"),p_billing_exempt:s(fd,"billing_exempt")==="true",p_free_post_credits:Number(s(fd,"free_post_credits")),p_reason:s(fd,"reason")||null}); if(error) fail("/admin/billing",error.message); revalidatePath("/admin/billing"); redirect(`/admin/billing?message=${encodeURIComponent("Beneficio del empleador actualizado")}`); }
+export async function adminCreatePromoterAction(fd:FormData) {
+  await requireUser("admin");
+  const fullName=s(fd,"full_name"); const phone=s(fd,"phone"); const requestedCode=cleanCode(s(fd,"referral_code"));
+  if(fullName.length<2)fail("/admin?tab=promoters","Escribe el nombre del promotor");
+  if(!/^[0-9+ ()-]{10,20}$/.test(phone))fail("/admin?tab=promoters","Teléfono inválido");
+  const code=requestedCode||cleanCode(fullName.split(/\s+/).slice(0,2).join("")+randomBytes(2).toString("hex"));
+  if(code.length<4)fail("/admin?tab=promoters","El código debe tener mínimo 4 letras o números");
+  const email=(s(fd,"email")||`promotor.${code.toLowerCase()}@jale.local`).toLowerCase();
+  const password=s(fd,"password")||promoterPassword();
+  if(password.length<8)fail("/admin?tab=promoters","La contraseña debe tener mínimo 8 caracteres");
+  let authUserId="";
+  try{
+    const admin=createAdminClient();
+    const {data:created,error:createError}=await admin.auth.admin.createUser({email,password,email_confirm:true,user_metadata:{intended_role:"promoter"}});
+    if(createError||!created.user)throw new Error(createError?.message||"No se pudo crear el usuario");
+    authUserId=created.user.id;
+    const {error:profileError}=await admin.from("profiles").insert({id:authUserId,full_name:fullName,phone,role:"promoter",municipality:"Aguascalientes"});
+    if(profileError)throw profileError;
+    const {error:promoterError}=await admin.from("promoters").insert({user_id:authUserId,referral_code:code,status:"active"});
+    if(promoterError)throw promoterError;
+  }catch(error){
+    if(authUserId){
+      try{await createAdminClient().auth.admin.deleteUser(authUserId)}catch{}
+    }
+    fail("/admin?tab=promoters",error instanceof Error?error.message:"No se pudo crear el promotor");
+  }
+  revalidatePath("/admin");
+  redirect(`/admin?tab=promoters&message=${encodeURIComponent(`Promotor creado. Usuario: ${email} | Contraseña: ${password} | Código: ${code}`)}`);
+}
+export async function adminPromoterStatusAction(fd:FormData) { await requireUser("admin"); const supabase=await createClient(); const {error}=await supabase.rpc("admin_update_promoter_status",{p_promoter_id:s(fd,"promoter_id"),p_status:s(fd,"status")}); if(error) fail("/admin?tab=promoters",error.message); revalidatePath("/admin"); redirect(`/admin?tab=promoters&message=${encodeURIComponent("Promotor actualizado")}`); }
+export async function adminMarkCommissionsPaidAction(fd:FormData) { await requireUser("admin"); const supabase=await createClient(); const ids=fd.getAll("commission_ids").map(String).filter(Boolean); const {error}=await supabase.rpc("admin_mark_commissions_paid",{p_commission_ids:ids,p_reference:s(fd,"payout_reference"),p_notes:s(fd,"notes")||null}); if(error) fail("/admin?tab=promoters",error.message); revalidatePath("/admin"); redirect(`/admin?tab=promoters&message=${encodeURIComponent("Comisiones marcadas como pagadas")}`); }
 export async function createSupportTicketAction(fd:FormData) { const {profile}=await requireUser(); if(profile.role==="admin") redirect("/admin?tab=system"); const supabase=await createClient(); const {error}=await supabase.rpc("create_support_ticket",{p_category:s(fd,"category"),p_title:s(fd,"title"),p_description:s(fd,"description"),p_page_context:s(fd,"page_context")||null,p_blocking:s(fd,"blocking")==="true"}); if(error) fail("/support",error.message); revalidatePath("/support"); redirect(`/support?message=${encodeURIComponent("Ticket enviado. Ya puedes consultar su seguimiento aquí.")}`); }
 export async function adminSupportTicketAction(fd:FormData) { await requireUser("admin"); const supabase=await createClient(); const {error}=await supabase.rpc("admin_update_support_ticket",{p_ticket_id:s(fd,"ticket_id"),p_status:s(fd,"status"),p_priority:s(fd,"priority"),p_admin_notes:s(fd,"admin_notes")||null}); if(error) fail("/admin?tab=system",error.message); revalidatePath("/admin"); revalidatePath("/support"); redirect(`/admin?tab=system&message=${encodeURIComponent("Ticket actualizado")}`); }
 export async function adminUserStatusAction(fd:FormData) { await requireUser("admin"); const supabase=await createClient(); const {error}=await supabase.rpc("admin_set_user_status",{p_user_id:s(fd,"user_id"),p_status:s(fd,"status")}); if(error) fail("/admin?tab=users",error.message); revalidatePath("/admin"); }

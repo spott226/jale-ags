@@ -1,4 +1,4 @@
-export type Role = "worker" | "employer" | "admin";
+export type Role = "worker" | "employer" | "admin" | "promoter";
 export type Profile = { id: string; full_name: string; phone: string; role: Role; status: "active" | "suspended" | "blocked"; municipality: string | null };
 export type Job = {
   id: string; employer_id: string; title: string; category: string; description: string;

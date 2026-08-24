@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 export async function createClient() {
@@ -16,4 +17,11 @@ export async function createClient() {
       },
     },
   );
+}
+
+export function createAdminClient() {
+  const url=process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if(!url||!key||key.includes("ONLY_FOR_LOCAL"))throw new Error("Falta configurar SUPABASE_SERVICE_ROLE_KEY en el servidor");
+  return createSupabaseClient(url,key,{auth:{autoRefreshToken:false,persistSession:false}});
 }
